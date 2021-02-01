@@ -1,15 +1,17 @@
 import alpaca_trade_api as tradeapi
 import requests
 import time
-from ta import macd
+#from ta import macd
+#import ta
+from ta.trend import macd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pytz import timezone
+import os
 
-# Replace these with your API connection info from the dashboard
-base_url = 'Your API URL'
-api_key_id = 'Your API Key'
-api_secret = 'Your API Secret'
+base_url = os.environ.get('ALPACA_API', 'https://paper-api.alpaca.markets')
+api_key_id = os.environ.get('ALPACA_API_KEY')
+api_secret = os.environ.get('ALPACA_SECRET')
 
 api = tradeapi.REST(
     base_url=base_url,
@@ -30,14 +32,32 @@ default_stop = .95
 risk = 0.001
 
 
+#def get_1000m_history_data(symbols):
+#    print('Getting historical data...')
+#    minute_history = {}
+#    c = 0
+#    for symbol in symbols:
+#        minute_history[symbol] = api.polygon.historic_agg(
+#            size="minute", symbol=symbol, limit=1000
+#        ).df
+#        c += 1
+#        print('{}/{}'.format(c, len(symbols)))
+#    print('Success.')
+#    return minute_history
+
 def get_1000m_history_data(symbols):
     print('Getting historical data...')
     minute_history = {}
     c = 0
+    today = date.today()
+    yesterday = date.today() - timedelta(days=1)
+
     for symbol in symbols:
-        minute_history[symbol] = api.polygon.historic_agg(
-            size="minute", symbol=symbol, limit=1000
+        minute_history[symbol] = api.polygon.historic_agg_v2(
+            timespan="minute", symbol=symbol, limit=1000, multiplier=1, _from=yesterday.strftime("%Y-%m-%d"), to=today.strftime("%Y-%m-%d")
         ).df
+        if 'vwap' in minute_history[symbol]:
+             minute_history[symbol].drop('vwap', axis=1, inplace=True)
         c += 1
         print('{}/{}'.format(c, len(symbols)))
     print('Success.')
@@ -71,8 +91,10 @@ def find_stop(current_value, minute_history, now):
 
 
 def run(tickers, market_open_dt, market_close_dt):
+    print('Inside run()')
     # Establish streaming connection
-    conn = tradeapi.StreamConn(base_url=base_url, key_id=api_key_id, secret_key=api_secret)
+    conn = tradeapi.StreamConn(base_url=base_url, key_id=api_key_id, secret_key=api_secret, data_stream='polygon')
+    print('Streaming connection established')
 
     # Update initial state with information from tickers
     volume_today = {}
